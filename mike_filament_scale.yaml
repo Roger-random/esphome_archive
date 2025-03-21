@@ -1,0 +1,72 @@
+# Defaults should work for this ESP8266 board
+i2c:
+
+sensor:
+  - platform: template
+    name: "Remaining"
+    id: filament_remaining
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: never # updates only from code, no auto-updates
+    filters:
+      - calibrate_linear:
+          - 122000 -> 0
+          - 890000 -> 100
+      - sliding_window_moving_average:
+          window_size: 30
+          send_every: 10
+  - platform: hx711
+    name: "HX711"
+    dout_pin: 14
+    clk_pin: 12
+    gain: 128
+    update_interval: 1s
+    filters:
+      - median:
+          window_size: 90
+          send_every: 60
+          send_first_at: 5
+    on_value:
+      then:
+        lambda: |-
+          id(filament_remaining).publish_state(x);
+  - platform: rotary_encoder
+    name: "Knob"
+    pin_a: 0
+    pin_b: 2
+    on_clockwise:
+      - display.page.show_next: oled_screen
+      - component.update: oled_screen
+    on_anticlockwise:
+      - display.page.show_previous: oled_screen
+      - component.update: oled_screen
+
+binary_sensor:
+  - platform: gpio
+    pin: 16
+    name: "Button"
+    filters:
+      - invert
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+
+font:
+  - file: "gfonts://Roboto"
+    id: roboto_20
+    size: 20
+
+display:
+  - platform: ssd1306_i2c
+    id: oled_screen
+    model: "SH1106 128x64"
+    address: 0x3C
+    pages:
+      - id: saver
+        lambda: |-
+          it.fill(COLOR_OFF);
+      - id: remaining
+        lambda: |-
+          it.printf(it.get_width() / 2, it.get_height() / 2, id(roboto_20), TextAlign::CENTER, "%.1f%% Left", id(filament_remaining).state);
+      - id: burnin
+        lambda: |-
+          it.fill(COLOR_ON);
